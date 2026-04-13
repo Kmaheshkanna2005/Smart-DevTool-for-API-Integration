@@ -11,3 +11,4 @@ An AI-driven tool that extracts key endpoints and authentication methods from AP
 ## Setup
 1. Clone the repo: `git clone https://github.com/Kmaheshkanna2005/Smart-API-Integrator.git`
 2. Install dependencies: `pip install requests beautifulsoup4`
+
