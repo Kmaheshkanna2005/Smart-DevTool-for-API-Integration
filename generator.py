@@ -106,8 +106,14 @@ class ApiClient:
         }}
         
         if self.api_key and "{auth_type}" != "None":
-            auth_val = f"Bearer {{self.api_key}}" if "{auth_type}" == "Bearer" else self.api_key
-            self.headers["{header_name}"] = auth_val
+            # LOGIC: If the user chose API-Key, use 'x-api-key', otherwise use 'Authorization'
+            if "{auth_type}" == "API-Key":
+                self.headers["x-api-key"] = self.api_key
+            elif "{auth_type}" == "Bearer":
+                self.headers["Authorization"] = f"Bearer {{self.api_key}}"
+            else:
+                # Default case for custom header names detected by AI
+                self.headers["{header_name}"] = self.api_key
 
     def call_api(self, data=None, user_id=None, params=None):
         current_endpoint = "{endpoint}"
