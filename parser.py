@@ -20,6 +20,9 @@ def analyze_api_data(scraped_data, user_context, target_url):
     Goal: {user_context}
     
     Instructions:
+    
+    you are best at reading the document and doing action 
+    
     1. If the goal uses words like 'fetch', 'get', 'list', or 'show', use GET. 
     2. If the goal uses words like 'create', 'post', 'send', or 'add', use POST.
     3. IMPORTANT: If the user provides an ID but NO new data to change, it is a GET request.

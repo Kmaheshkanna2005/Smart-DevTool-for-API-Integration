@@ -23,7 +23,7 @@ goal = st.text_area("🎯 What is your goal?")
 
 st.subheader("Authentication (Optional)")
 user_token = st.text_input("Paste your Session Token/Bearer Token here:", type="password")
-auth_method = st.selectbox("Auth Type", ["None", "Bearer", "API-Key"])
+auth_method = st.selectbox("Auth Type", ["None", "API-Key"])
 
 if st.button("Generate Wrapper Class"):
     if not url or not goal:
