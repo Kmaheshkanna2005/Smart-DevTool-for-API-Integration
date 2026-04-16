@@ -1,41 +1,54 @@
 import os
 import json
-from openai import OpenAI
-from dotenv import load_dotenv
 import traceback
+import streamlit as st
+from openai import OpenAI
 
-load_dotenv()
+# Initialize Groq Client using Streamlit Secrets
+# This replaces os.getenv and load_dotenv()
+def get_groq_client():
+    try:
+        # Check if we are running locally or on Streamlit Cloud
+        if "GROQ_API_KEY" in st.secrets:
+            api_key = st.secrets["GROQ_API_KEY"]
+        else:
+            # Fallback for local testing if secrets.toml isn't set up
+            api_key = os.getenv("GROQ_API_KEY")
+            
+        return OpenAI(
+            api_key=api_key,
+            base_url="https://api.groq.com/openai/v1"
+        )
+    except Exception as e:
+        st.error("Groq API Key not found. Please set it in Streamlit Secrets.")
+        return None
 
-# Setup Groq Client
-client = OpenAI(
-    api_key=os.getenv("GROQ_API_KEY"),
-    base_url="https://api.groq.com/openai/v1"
-)
-
-# Added 'url' to the function arguments so the prompt can use it!
 def analyze_api_data(scraped_data, user_context, target_url):
+    client = get_groq_client()
+    if not client:
+        return {"error": "API Client not initialized"}
+
     prompt = f"""
     Scraped Content: {scraped_data}
     Target URL: {target_url}
     Goal: {user_context}
     
     Instructions:
+    1. Identify the base_url and endpoint from the content.
+    2. Method Selection:
+       - Use GET for 'fetch', 'list', 'show', or 'read'.
+       - Use POST for 'create', 'add', or 'send'.
+       - If an ID is provided but no data payload is mentioned, default to GET.
+    3. Authentication Detection:
+       - If the documentation explicitly mentions 'Authorization', 'Bearer', or 'x-api-key', identify the 'auth_type' (Bearer or API-Key).
+       - If no auth is mentioned, set 'auth_type' to 'None' and 'auth_header_name' to null.
     
-    you are best at reading the document and doing action 
-    
-    1. If the goal uses words like 'fetch', 'get', 'list', or 'show', use GET. 
-    2. If the goal uses words like 'create', 'post', 'send', or 'add', use POST.
-    3. IMPORTANT: If the user provides an ID but NO new data to change, it is a GET request.
-    4. ONLY use POST/PUT if the user explicitly wants to save or change information.
-    
-    "CRITICAL: If the documentation does not explicitly show an 'Authorization' header as mandatory, set 'auth_type' to 'None' and 'auth_header_name' to null. Do not guess authentication."
-    
-    Return ONLY JSON:
+    Return ONLY valid JSON:
     {{
         "base_url": "...",
         "endpoint": "...",
-        "method": "POST or GET or PUT or DELETE or PATCH",
-        "body_template": {{ "field1": "value", "field2": "value" }}, # Only if POST/PUT
+        "method": "...",
+        "body_template": {{}}, 
         "auth_type": "None",
         "auth_header_name": "Authorization"
     }}
@@ -53,7 +66,7 @@ def analyze_api_data(scraped_data, user_context, target_url):
         
         raw_content = response.choices[0].message.content.strip()
         
-        # Cleaning Markdown formatting if present
+        # Cleaning Markdown formatting
         if "```" in raw_content:
             raw_content = raw_content.split("```")[1]
             if raw_content.startswith("json"):
@@ -62,18 +75,17 @@ def analyze_api_data(scraped_data, user_context, target_url):
         return json.loads(raw_content)
 
     except json.JSONDecodeError:
-        return {"error": f"AI returned invalid JSON: {raw_content}"}
+        return {"error": "AI returned invalid JSON format."}
     except Exception as e:
         traceback.print_exc() 
         return {"error": str(e)}
 
+# Test block
 if __name__ == "__main__":
-    # Test values
-    sample_data = {'headings': ['GET /users'], 'code_samples': ["https://jsonplaceholder.typicode.com/users"]}
-    context = "I want to fetch a single user by their ID."
+    sample_data = "GET /users https://jsonplaceholder.typicode.com/users"
+    context = "I want to fetch all users."
     test_url = "https://jsonplaceholder.typicode.com"
     
     print("--- Starting Groq Analysis ---")
-    # Pass all 3 arguments now!
     result = analyze_api_data(sample_data, context, test_url)
     print(json.dumps(result, indent=4))
