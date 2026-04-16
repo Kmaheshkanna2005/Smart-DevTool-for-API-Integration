@@ -1,8 +1,3 @@
-Your `README.md` is a crucial part of your project submission. It tells the story of how your tool works and how to get it running.
-
-Here is a professionally structured `README.md` that covers your project title, setup, and your specific technical approach (including the multi-language generation logic we built).
-
-***
 
 # Smart API Integrator: AI-Driven Wrapper Generator
 
