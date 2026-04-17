@@ -6,4 +6,5 @@ generated_api_client.py
 generated_api_client.js
 ApiClient.class
 ApiClient.java
+users.json
 *.pyc

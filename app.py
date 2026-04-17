@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit_authenticator as stauth
 import json
 import io
 import os
@@ -7,121 +8,125 @@ from scraper import fetch_api_docs
 from parser import analyze_api_data
 from generator import generate_wrapper
 
-# --- 1. API KEY SAFETY CHECK ---
-# This ensures the app doesn't crash locally if secrets.toml is missing
-api_key = None
-try:
-    if "GROQ_API_KEY" in st.secrets:
-        api_key = st.secrets["GROQ_API_KEY"]
-except Exception:
-    # Fallback for local terminal environment variables
-    api_key = os.getenv("GROQ_API_KEY")
+# --- 1. DATA PERSISTENCE ---
+USER_DATA_FILE = 'users.json'
 
-# --- 2. PAGE CONFIGURATION ---
-st.set_page_config(
-    page_title="Smart DevTool | API Integrator", 
-    page_icon="🚀", 
-    layout="centered"
+def load_credentials():
+    if os.path.exists(USER_DATA_FILE):
+        with open(USER_DATA_FILE, 'r') as f:
+            return json.load(f)
+    # Default admin if file is empty
+    return {"usernames": {
+        "admin": {"name": "Admin", "password": "abc", "email": "admin@test.com"}
+    }}
+
+def save_credentials():
+    with open(USER_DATA_FILE, 'w') as f:
+        json.dump(st.session_state['credentials'], f, indent=4)
+
+if 'credentials' not in st.session_state:
+    st.session_state['credentials'] = load_credentials()
+
+# --- 2. AUTHENTICATOR SETUP ---
+# Using a 32-character key to stop the HMAC warning
+authenticator = stauth.Authenticate(
+    st.session_state['credentials'],
+    "api_integrator_cookie",
+    "abcdefghijklmnopqrstuvwxyz123456", 
+    cookie_expiry_days=30
 )
 
-st.title("🚀 Smart DevTool: API Integrator")
-st.markdown("Generate and test API wrappers in seconds using AI.")
+# --- 3. PAGE CONFIG ---
+st.set_page_config(page_title="Smart DevTool", page_icon="🚀", layout="centered")
 
-# --- 3. SIDEBAR SETTINGS ---
-with st.sidebar:
-    st.header("⚙️ Configuration")
-    lang_choice = st.selectbox(
-        "Target Language", 
-        ["python", "javascript", "java"],
-        help="Select the programming language for the generated wrapper."
-    )
+# --- 4. AUTHENTICATION FLOW ---
+if not st.session_state.get("authentication_status"):
+    st.title("🔐 Smart DevTool Access")
     
-    st.divider()
+    # Use a Radio button to toggle between Login and Register
+    mode = st.radio("Choose Mode", ["Login", "Register"], horizontal=True)
+
+    if mode == "Register":
+        st.subheader("Create a New Account")
+        # register_user now in a controlled flow
+        try:
+            # We catch the return values to check if someone ACTUALLY clicked submit
+            res = authenticator.register_user(location='main')
+            if res[0]: # email_of_registered_user is not None
+                save_credentials()
+                st.success('User registered successfully! Now switch to Login mode.')
+        except Exception as e:
+            st.error(f"Registration system error: {e}")
+
+    elif mode == "Login":
+        st.subheader("Welcome Back")
+        try:
+            # We only run login logic here
+            authenticator.login(location='main')
+        except Exception:
+            # Silently handle the "User not authorized" during initial load
+            pass
+
+        if st.session_state.get("authentication_status") is False:
+            st.error('Username/password is incorrect')
+        elif st.session_state.get("authentication_status") is None:
+            st.info('Please enter your details to continue.')
+
+# --- 5. THE HOME PAGE (Only visible after Login) ---
+if st.session_state.get("authentication_status"):
     
-    # Connection Status Indicator
-    if api_key:
-        st.success("Groq AI Engine: Connected ✅")
-    else:
-        st.error("Groq AI Engine: Disconnected ❌")
-        st.info("💡 To fix: Add `GROQ_API_KEY` to `.streamlit/secrets.toml` locally or to 'Secrets' on Streamlit Cloud.")
+    # SIDEBAR SETUP
+    with st.sidebar:
+        st.header(f"Welcome, {st.session_state['name']}! 👋")
+        # Logout button
+        authenticator.logout('Logout', 'main')
+        st.divider()
+        st.header("Settings")
+        lang_choice = st.selectbox("Language", ["python", "javascript", "java"])
 
-    st.info("ℹ️ Live execution is currently only supported for Python wrappers.")
+    # MAIN CONTENT
+    st.title("🚀 Smart DevTool: API Integrator")
+    
+    # Get API Key
+    api_key = st.secrets.get("GROQ_API_KEY") or os.getenv("GROQ_API_KEY")
 
-# --- 4. USER INPUTS ---
-url = st.text_input("🔗 API Documentation URL", placeholder="https://api.example.com/docs")
-goal = st.text_area("🎯 What is your goal?", placeholder="e.g., Get the 7-day weather forecast for Coimbatore")
-
-with st.expander("🔐 Authentication (Optional)"):
-    col1, col2 = st.columns(2)
-    with col1:
-        auth_method = st.selectbox("Auth Type", ["None", "API-Key", "Bearer"])
-    with col2:
-        user_token = st.text_input("Token / Key", type="password", placeholder="Paste your token here")
-
-# --- 5. CORE LOGIC: GENERATION ---
-if st.button("Generate Wrapper Class", type="primary", use_container_width=True):
     if not api_key:
-        st.error("Operation failed: Missing Groq API Key.")
-    elif not url or not goal:
-        st.error("Please provide both the Documentation URL and your Goal!")
-    else:
-        with st.spinner("🤖 AI is analyzing documentation and writing code..."):
-            try:
-                # Step 1: Scrape the webpage
-                raw_data = fetch_api_docs(url)
-                
-                # Step 2: Parse using AI (Passes data to Groq via parser.py)
-                metadata = analyze_api_data(raw_data, goal, url)
-                
-                if "error" in metadata:
-                    st.error(f"AI Parsing Error: {metadata['error']}")
-                else:
-                    # Step 3: Generate the code file
-                    filename = generate_wrapper(
-                        metadata, 
-                        language=lang_choice, 
-                        user_token=user_token,
-                        auth_method=auth_method
-                    )
+        st.error("❌ Groq API Key missing! Check your secrets.")
+    
+    url = st.text_input("🔗 API Documentation URL")
+    goal = st.text_area("🎯 What is your goal?")
+
+    if st.button("Generate Wrapper Class", type="primary", use_container_width=True):
+        if not url or not goal:
+            st.warning("Please provide both URL and Goal.")
+        else:
+            with st.spinner("🤖 Analyzing documentation..."):
+                try:
+                    raw_data = fetch_api_docs(url)
+                    metadata = analyze_api_data(raw_data, goal, url)
+                    filename = generate_wrapper(metadata, lang_choice)
                     
-                    # Store results in session state to survive page refreshes
                     with open(filename, "r", encoding="utf-8") as f:
                         st.session_state['generated_code'] = f.read()
                     st.session_state['lang'] = lang_choice
-                    st.success(f"✨ {lang_choice.capitalize()} wrapper generated successfully!")
-                
-            except Exception as e:
-                st.error(f"An unexpected error occurred: {e}")
+                except Exception as e:
+                    st.error(f"Generation failed: {e}")
 
-# --- 6. DISPLAY & EXECUTION SECTION ---
-if 'generated_code' in st.session_state:
-    st.divider()
-    st.subheader(f"📄 Generated {st.session_state['lang'].capitalize()} Code")
-    st.code(st.session_state['generated_code'], language=st.session_state['lang'])
-
-    # Execution is only for Python
-    if st.session_state['lang'] == "python":
-        if st.button("▶️ Run & Test This Code", use_container_width=True):
-            st.write("🛰️ **Sending Request to API...**")
-            
-            output_buffer = io.StringIO()
-            try:
-                # CRITICAL: We use a shared dictionary for globals/locals 
-                # to ensure class definitions and execution share memory.
-                exec_scope = {}
-                
-                with contextlib.redirect_stdout(output_buffer):
-                    exec(st.session_state['generated_code'], exec_scope, exec_scope)
-                
-                result_text = output_buffer.getvalue()
-                
-                st.subheader("🖥️ Execution Output")
-                if result_text.strip():
-                    st.success("API Call Processed.")
-                    st.text_area("Console Output", value=result_text, height=350)
-                else:
-                    st.warning("The code executed but returned no output to the console.")
-                    st.info("💡 Hint: Ensure your generated code contains 'print()' statements.")
-                    
-            except Exception as e:
-                st.error(f"Runtime Execution Error: {e}")
+    # Code Display
+    if 'generated_code' in st.session_state:
+        st.divider()
+        st.subheader(f"📄 Generated {st.session_state['lang'].capitalize()} Code")
+        st.code(st.session_state['generated_code'], language=st.session_state['lang'])
+        
+        # Test Runner for Python
+        if st.session_state['lang'] == "python":
+            if st.button("▶️ Run & Test"):
+                output_buffer = io.StringIO()
+                try:
+                    scope = {}
+                    with contextlib.redirect_stdout(output_buffer):
+                        exec(st.session_state['generated_code'], scope, scope)
+                    st.success("Test complete.")
+                    st.text_area("Console", value=output_buffer.getvalue(), height=200)
+                except Exception as e:
+                    st.error(f"Execution Error: {e}")
