@@ -24,7 +24,7 @@ python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
 # Install dependencies
-pip install streamlit requests beautifulsoup4 google-generativeai
+pip install -r requirements.txt
 ```
 
 ### 3. Environment Configuration
