@@ -57,6 +57,13 @@ streamlit run app.py
 
 ---
 
+### 🔐 Security & Persistence 
+* **Stateful Authentication:** Integrated a secure Login and Registration system to protect engine access.
+* **Data Persistence:** Implemented a JSON-based storage layer to maintain user credentials across application restarts.
+* **Secret Abstraction:** Utilizes .gitignore and Streamlit Secrets to prevent API key leakage.
+
+---
+
 ## 💡 Solution Approach
 
 My approach focuses on **Dynamic Metadata Mapping**. Instead of hard-coding support for specific APIs, the system follows a three-stage pipeline:
@@ -85,6 +92,8 @@ The final step uses a custom-built **Code Generation Engine**. It takes the JSON
 - [x] Phase 2: AI Parsing & Metadata Extraction
 - [x] Phase 3: Multi-language Code Generation (Python, JS, Java)
 - [x] Phase 4: Error Handling for Timeouts and 405/403 errors
+- [x] Phase 5: Integrated User Authentication (Login/Register)
+- [x] Phase 6: Persistent JSON-based User Storage
 
 ---
 
